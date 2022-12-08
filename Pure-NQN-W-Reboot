@@ -34,60 +34,49 @@ $ESXiServers = @(get-cluster $ClusterName | get-vmhost)
 $ScriptTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
 function RebootESXiServer ($CurrentServer) {
+    # If the script made a change it will reboot the host
+
+    # Variables
     $timeout = New-TimeSpan -Minutes 8
     $2ndtimeout = New-TimeSpan -Minutes 40
     $ServerName = $CurrentServer.Name
 
-    # Check if a server is connected, if not it runs the NVMeSettings function on all hosts in the cluster
-    if ($null -eq $ESXiServer -or $vCStatus.IsConnected -ne "True"){
-        if ($null -eq $vCenterServer) {$vCenterServer = Read-Host -Prompt "vCenter FQDN"}
-        if ($null -eq $ClusterName) {$ClusterName = Read-Host -Prompt "Name of the cluster to run a Rolling-Reboot to"}
-        if ($null -eq $Credentials) {[PSCredential]$Credentials = Get-Credential}
-        $RebootVerify = (Read-Host -Prompt "Are you sure you want to reboot cluster $Clustername?")
-                    if ($RebootVerify -like 'n') {
-                        Exit
-
-                        # Stop the Stopwatch
-                        if ($ScriptTimer.IsRunning -eq "True") {$ScriptTimer.Stop()}
-        
-                        # Disconnect vCenter
-                        $vCStatus = (Disconnect-VIServer -Server $vCenterServer -Confirm:$false)
-                    } # Close RebootVerify
-
-            # Connect to vCenter
-            $vCStatus = (Connect-VIServer -Server $vCenterServer -Credential $Credentials)
-    
-            # Get Server Objects from the cluster
-            $ESXiServers = @(get-cluster $ClusterName | get-vmhost)
-            
-            foreach ($ESXiServer in $ESXiServers) {RebootESXiServer ($ESXiServer)}
-
-            # If vCenter is connected it disconnects
-            if ($vCStatus.IsConnected -eq "True") {$vCStatus = (Disconnect-VIServer -Server $vCenterServer -Confirm:$false)}
-
-        } # Close the loop section of the script
-    # If paramters were passed from another script it bypasses the section above
-        Else {
-
-    # If the script made a change it will reboot the host
+    # Write Output of Host being rebooted
     Write-Output “## Rebooting $ServerName ##”
-    Write-Output “$ServerName is entering Maintenance Mode”
-    Set-VMhost $CurrentServer -State maintenance -Evacuate | Out-Null
+
+    # Get the server state
     $ServerState = (get-vmhost $ServerName).ConnectionState
 
-    # If server did not enter maintenance mode the script will exit
-    if ($ServerState -ne “Maintenance”) {
-        Write-Output “Server did not enter maintanenace mode. Cancelling remaining servers”
+    # If the server was not in MM, then it sets the host for MM
+    if ($ServerState -ne “Maintenance”){
+        Write-Output “$ServerName is entering Maintenance Mode”
+        Set-VMhost $CurrentServer -State maintenance -Evacuate | Out-Null
         
-        # Stop the Stopwatch
-        if ($ScriptTimer.IsRunning -eq "True") {$ScriptTimer.Stop()}
-        
-        # Disconnect vCenter
-        $vCStatus = (Disconnect-VIServer -Server $vCenterServer -Confirm:$false)
+        # Get the Server State again to check for a server that did not enter MM
+        $ServerState = (get-vmhost $ServerName).ConnectionState
 
-    Exit
-    } # Close check that exits out of the script if server does not enter Maintenance Mode
-    Write-Output “$ServerName is in Maintenance Mode”
+        # If server did not enter maintenance mode the script will exit
+        if ($ServerState -ne “Maintenance”) {
+            Write-Output “Server did not enter maintanenace mode. Cancelling remaining servers”
+        
+            # Stop the Stopwatch
+            if ($ScriptTimer.IsRunning -eq "True") {$ScriptTimer.Stop()}
+        
+            # Disconnect vCenter
+            (Disconnect-VIServer -Server $vCenterServer -Confirm:$false)
+            Exit
+        } # Close check that exits out of the script if server does not enter Maintenance Mode
+
+        # Write Ouput the host is in MM
+        Write-Output “$ServerName is in Maintenance Mode”
+    } # Close set Maintenance Mode
+    
+    # If the server was already in MM, then continue to reboot
+    elseif ($ServerState -eq “Maintenance”) {
+        
+        # Write Output if the host was already in MM before being set
+        Write-Output “$ServerName is already in Maintenance Mode”
+    } # Close catch if server was already in MM.
 
     # Reboot server
     Write-Output “$ServerName is Rebooting”
@@ -123,7 +112,7 @@ function RebootESXiServer ($CurrentServer) {
 
             # Prepare for exit by disconnecting vCenter
             Write-Output "$ServerName did not complete reboot"
-            $vCStatus = (Disconnect-VIServer -Server $vCenterServer -Confirm:$False)
+            (Disconnect-VIServer -Server $vCenterServer -Confirm:$False)
 
             # Exit out
             Exit
@@ -146,7 +135,6 @@ function RebootESXiServer ($CurrentServer) {
     } # Close check for server to be online and in Maintenance Mode
     while ($ServerState -eq "Maintenance") 
         Write-Output "## Reboot Complete ##"
-} # Close Else
 } # Close Reboot Function
 
 Function NVMeSettings ($CurrentServer) {
