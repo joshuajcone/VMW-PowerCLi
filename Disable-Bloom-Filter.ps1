@@ -20,10 +20,10 @@ Function BloomFilter ($CurrentServer) {
     
     # Check Bloom Status
     $esxcli = Get-EsxCli -VMHost $ServerName -V2
-    $result = $esxcli.system.settings.advanced.list.Invoke(@{option = '/SE/BFEnabled'})
+    $result = $esxcli.system.settings.advanced.list.Invoke(@{option = '/SE/BFEnabled' })
 
     # If the Bloom Filter was not disabled then runs workflow to disable
-    if($result.intvalue -ne 0){
+    if ($result.intvalue -ne 0) {
                
         # Put server in maintenance mode
         Write-Output "#### Maintenance Mode $ServerName ####"
@@ -49,7 +49,7 @@ Function BloomFilter ($CurrentServer) {
 
 # Main loop
 foreach ($ESXiServer in $ESXiServers) {
-BloomFilter ($ESXiServer)
+    BloomFilter ($ESXiServer)
 }
     
 # Close vCenter connection
