@@ -26,24 +26,24 @@ function FCDataCollect ($CurrentServer) {
     # Loop to get WWPN information for each server
     foreach ($HBA in $HBAs) {
         [Ordered]@{
-        VMHost = $ServerName
-        Device = Get-VMHostHBA -Type FibreChannel -VMHost $ServerName -Device $HBA.Device | Select-Object Device
-        WWPN = Get-VMHostHBA -Type FibreChannel -VMHost $ServerName -Device $HBA.Device | Select-Object @{N="WWPN";E={"{0:X}" -f $_.PortWorldWideName}}
-            } # Close Hash Table
-        } # Close loop for HBA export
-    } # Close FCDataCollect Function
+            VMHost = $ServerName
+            Device = Get-VMHostHBA -Type FibreChannel -VMHost $ServerName -Device $HBA.Device | Select-Object Device
+            WWPN   = Get-VMHostHBA -Type FibreChannel -VMHost $ServerName -Device $HBA.Device | Select-Object @{N = "WWPN"; E = { "{0:X}" -f $_.PortWorldWideName } }
+        } # Close Hash Table
+    } # Close loop for HBA export
+} # Close FCDataCollect Function
     
 # Main loop
-$WWPNReport = foreach ($ESXiServer in $ESXiServers) {FCDataCollect ($ESXiServer)}
+$WWPNReport = foreach ($ESXiServer in $ESXiServers) { FCDataCollect ($ESXiServer) }
 
 
 $Out = @()
-$WWPNOut = $WWPNReport | ForEach-Object -Parallel{
-$rollup = $using:Out
-$rollup += [PSCustomObject]@{
-    Name = $_.VMHost
-    HBA = $_.Device
-    WWPN = $_.WWPN
+$WWPNOut = $WWPNReport | ForEach-Object -Parallel {
+    $rollup = $using:Out
+    $rollup += [PSCustomObject]@{
+        Name = $_.VMHost
+        HBA  = $_.Device
+        WWPN = $_.WWPN
     } # Close create object
     return $rollup
 } # Close the data rollup 
