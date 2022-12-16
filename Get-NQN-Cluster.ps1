@@ -25,21 +25,21 @@ function NVMeDataCollect ($CurrentServer) {
 
     # Get Information for the Report
     [Ordered]@{
-        'VMHost' = $ServerName
+        'VMHost'  = $ServerName
         'HostNQN' = $EsxCli.nvme.info.get.invoke().HostNQN
-        } # Close the Hash Table
-    } # Close NVMeDataCollect
+    } # Close the Hash Table
+} # Close NVMeDataCollect
     
 # Loop to get NQN's
-$NQNReport = foreach ($ESXiServer in $ESXiServers) {NVMeDataCollect ($ESXiServer)}
+$NQNReport = foreach ($ESXiServer in $ESXiServers) { NVMeDataCollect ($ESXiServer) }
 
 # Output the Report
 $Out = @()
-$NQNOut = $NQNReport | ForEach-Object -Parallel{
-$rollup = $using:Out
-$rollup += [PSCustomObject]@{
-    Name = $_.VMHost
-    NQN = $_.HostNQN
+$NQNOut = $NQNReport | ForEach-Object -Parallel {
+    $rollup = $using:Out
+    $rollup += [PSCustomObject]@{
+        Name = $_.VMHost
+        NQN  = $_.HostNQN
     } # Close create object
     return $rollup
 } # Close the data rollup 
