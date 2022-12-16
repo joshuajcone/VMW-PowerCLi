@@ -1,3 +1,4 @@
+# This script automates https://support.purestorage.com/Solutions/VMware_Platform_Guide/How-To%27s_for_VMware_Solutions/NVMe_over_Fabrics/How_To%3A_Setup_NVMe-FC_with_VMware
 # Supply the hostname/FQDN for your vcenter server, and the name of the cluster you want NVMe settings applied for
 # Script reboots each ESXi server in the cluster, one at a time, only if the FC adapter module is changed
 [CmdletBinding()]
@@ -16,12 +17,12 @@ $ReportName = 'NQN'
 
 #ClaimRule parameters
 $ClaimRule = @{
-rule = 102
-type = 'vendor'
-plugin = 'HPP'
-configstring = 'latency-eval-time=180000,pss=LB-Latency'
-vendor = 'NVMe'
-model = 'Pure*'
+    rule         = 102
+    type         = 'vendor'
+    plugin       = 'HPP'
+    configstring = 'latency-eval-time=180000,pss=LB-Latency'
+    vendor       = 'NVMe'
+    model        = 'Pure*'
 }
 
 # Connect to vCenter
@@ -40,101 +41,109 @@ function RebootESXiServer ($CurrentServer) {
     $timeout = New-TimeSpan -Minutes 8
     $2ndtimeout = New-TimeSpan -Minutes 40
     $ServerName = $CurrentServer.Name
-
+    
     # Write Output of Host being rebooted
     Write-Output “## Rebooting $ServerName ##”
-
+    
     # Get the server state
     $ServerState = (get-vmhost $ServerName).ConnectionState
-
+    
     # If the server was not in MM, then it sets the host for MM
-    if ($ServerState -ne “Maintenance”){
+    if ($ServerState -ne “Maintenance”) {
         Write-Output “$ServerName is entering Maintenance Mode”
         Set-VMhost $CurrentServer -State maintenance -Evacuate | Out-Null
-        
+            
         # Get the Server State again to check for a server that did not enter MM
         $ServerState = (get-vmhost $ServerName).ConnectionState
-
+    
         # If server did not enter maintenance mode the script will exit
         if ($ServerState -ne “Maintenance”) {
             Write-Output “Server did not enter maintanenace mode. Cancelling remaining servers”
-        
+            
             # Stop the Stopwatch
-            if ($ScriptTimer.IsRunning -eq "True") {$ScriptTimer.Stop()}
-        
+            if ($ScriptTimer.IsRunning -eq "True") { $ScriptTimer.Stop() }
+            
             # Disconnect vCenter
             (Disconnect-VIServer -Server $vCenterServer -Confirm:$false)
             Exit
         } # Close check that exits out of the script if server does not enter Maintenance Mode
-
+    
         # Write Ouput the host is in MM
         Write-Output “$ServerName is in Maintenance Mode”
     } # Close set Maintenance Mode
-    
-    # If the server was already in MM, then continue to reboot
-    elseif ($ServerState -eq “Maintenance”) {
         
+    # If the server was already in MM, then report, and continue to reboot
+    elseif ($ServerState -eq “Maintenance”) {
+            
         # Write Output if the host was already in MM before being set
         Write-Output “$ServerName is already in Maintenance Mode”
     } # Close catch if server was already in MM.
-
+    
     # Reboot server
     Write-Output “$ServerName is Rebooting”
     Restart-VMHost $CurrentServer -Confirm:$false | Out-Null
-
+    
     # Start the Timer
     $RebootTimer = [System.Diagnostics.Stopwatch]::StartNew()
-
-    # Wait for Server to show as down
+    
+    # Check every second for server to show as down
     do {
         Start-Sleep 1
         $ServerState = (get-vmhost $ServerName).ConnectionState
     } # Close check for server state every second
-    until (($ServerState -eq "NotResponding") -or ($RebootTimer.Elapsed -ge $timeout)) 
-        Write-Output “$ServerName is Down”
     
-    # Wait for server to be in maintenance mode
+    # A timeout was added here in case the server reboots without reporting "Not Responding status", behavior introduced in 7.0u3h
+    until (($ServerState -eq "NotResponding") -or ($RebootTimer.Elapsed -ge $timeout)) 
+    Write-Output “$ServerName is Down”
+        
+    # Check every minute for server to be back from reboot and in maintenance mode
     do {
-    Start-Sleep 60
-    $ServerState = (get-vmhost $ServerName).ConnectionState
-    Write-Output "$ServerName is Waiting for Reboot"
+        Start-Sleep 60
+        $ServerState = (get-vmhost $ServerName).ConnectionState
+        Write-Output "$ServerName is Waiting for Reboot"
     } # Close waiting for server to reboot
-
+    
     # Wait for server to come back in Maintenance Mode, or passes $2ndtimeout
     until (($ServerState -eq "Maintenance") -or ($RebootTimer.Elapsed -ge $2ndtimeout)) 
-
+    
     # If passed $2ndtimeout the job exits
-        if ($RebootTimer.Elapsed -ge $2ndtimeout) {
+    if ($RebootTimer.Elapsed -ge $2ndtimeout) {
+                
+        # Stop the Stopwatch
+        if ($RebootTimer.IsRunning -eq "True") { $RebootTimer.Stop() }
+        if ($ScriptTimer.IsRunning -eq "True") { $ScriptTimer.Stop() }
+    
+        # Inform user which server did not come back online after a reboot
+        Write-Output "$ServerName did not complete reboot"
+    
+        # Prepare for exit by disconnecting vCenter
+        Disconnect-VIServer -Server $vCenterServer -Confirm:$false | Out-Null
+    
+        # Exit out
+        Exit
+    } # Close check for script timeout
+    
+    # If the server successfully comes back after reboot, the script continues
+    else {
+    
+        # Report the total server reboot time.
+        $Minutes = $RebootTimer.Elapsed.Minutes
+        $Seconds = $RebootTimer.Elapsed.Seconds
+        Write-Output "$ServerName is back up. Took $Minutes minutes and $Seconds seconds"
             
-            # Stop the Stopwatch
-            if ($RebootTimer.IsRunning -eq "True") {$RebootTimer.Stop()}
-            if ($ScriptTimer.IsRunning -eq "True") {$ScriptTimer.Stop()}
-
-            # Prepare for exit by disconnecting vCenter
-            Write-Output "$ServerName did not complete reboot"
-            (Disconnect-VIServer -Server $vCenterServer -Confirm:$False)
-
-            # Exit out
-            Exit
-        } # Close check for script timeout
-        else {
-            $Minutes = $RebootTimer.Elapsed.Minutes
-            $Seconds = $RebootTimer.Elapsed.Seconds
-            Write-Output "$ServerName is back up. Took $Minutes minutes and $Seconds seconds"
-        
-            # Stop the Stopwatch
-            if ($RebootTimer.IsRunning -eq "True") {$RebootTimer.Stop()}
-        } # Close output for Maintenace Mode time
-      
+        # Stop the Stopwatch
+        if ($RebootTimer.IsRunning -eq "True") { $RebootTimer.Stop() }
+    } # Close output for Reboot time
+          
     # Exit maintenance mode
     Write-Output "Exiting Maintenance mode"
     Set-VMhost $CurrentServer -State Connected | Out-Null
     do {
-    Start-Sleep 10
-    $ServerState = (get-vmhost $ServerName).ConnectionState
+        Start-Sleep 10
+        $ServerState = (get-vmhost $ServerName).ConnectionState
     } # Close check for server to be online and in Maintenance Mode
     while ($ServerState -eq "Maintenance") 
-        Write-Output "## Reboot Complete ##"
+    Write-Output "## Reboot Complete ##"
 } # Close Reboot Function
 
 Function NVMeSettings ($CurrentServer) {
@@ -184,7 +193,7 @@ Function NVMeSettings ($CurrentServer) {
         Write-Output "Adding Claim Rule $ServerName"
         $esxcli.storage.core.claimrule.add.Invoke($ClaimRule) | Out-Null
         $esxcli.storage.core.claimrule.load.invoke() | Out-Null
-        } # Close If
+    } # Close If
 } # Close NVMeSettings
 
 function FCDataCollect ($CurrentServer) {
@@ -200,7 +209,7 @@ function FCDataCollect ($CurrentServer) {
         [Ordered]@{
             VMHost = $ServerName
             Device = Get-VMHostHBA -Type FibreChannel -VMHost $ServerName -Device $HBA.Device | Select-Object Device
-            WWPN = Get-VMHostHBA -Type FibreChannel -VMHost $ServerName -Device $HBA.Device | Select-Object @{N="WWPN";E={"{0:X}" -f $_.PortWorldWideName}}
+            WWPN   = Get-VMHostHBA -Type FibreChannel -VMHost $ServerName -Device $HBA.Device | Select-Object @{N = "WWPN"; E = { "{0:X}" -f $_.PortWorldWideName } }
         } # Close Hash Table
     } # Close loop for HBA export
 } # Close the FCDataCollect Function
@@ -213,10 +222,10 @@ function NVMeDataCollect ($CurrentServer) {
     $NvmeData = Get-EsxCli -VMHost $ServerName -V2
 
     # Get Information for the Report
-        [Ordered]@{
-            'VMHost' = $ServerName
-            'HostNQN' = $NvmeData.nvme.info.get.invoke().HostNQN
-        } # Close the Hash Table
+    [Ordered]@{
+        'VMHost'  = $ServerName
+        'HostNQN' = $NvmeData.nvme.info.get.invoke().HostNQN
+    } # Close the Hash Table
 } # Close the NVMeDataCollect Function
 
 # Main Loop
@@ -236,13 +245,13 @@ $WWPNReport = foreach ($ESXiServer in $ESXiServers) {
 
 # Rollup the data for export
 $Export = @()
-    $RolledOutPut = $WWPNReport + $NVMeReport | ForEach-Object -Parallel{
+$RolledOutPut = $WWPNReport + $NVMeReport | ForEach-Object -Parallel {
     $Rollup = $using:Export
     $Rollup += [PSCustomObject]@{
-    Name = $_.VMHost
-    NQN = $_.HostNQN
-    HBA = $_.Device
-    WWPN = $_.WWPN
+        Name = $_.VMHost
+        NQN  = $_.HostNQN
+        HBA  = $_.Device
+        WWPN = $_.WWPN
     }
     return $Rollup
 } # Close the data rollup
@@ -256,8 +265,8 @@ $ScriptSeconds = $ScriptTimer.Elapsed.Seconds
 Write-Output "The script is complete. Total time was $ScriptMinutes minutes and $ScriptSeconds seconds"
 
 # Confirm all stopwatches are stopped
-if ($RebootTimer.IsRunning -eq "True") {$RebootTimer.Stop()}
-if ($ScriptTimer.IsRunning -eq "True") {$ScriptTimer.Stop()}
+if ($RebootTimer.IsRunning -eq "True") { $RebootTimer.Stop() }
+if ($ScriptTimer.IsRunning -eq "True") { $ScriptTimer.Stop() }
 
 # Close vCenter connection
-if ($vcstatus.IsConnected -eq "True") {$vCStatus = (Disconnect-VIServer -Server $vCenterServer -Confirm:$false)}
+if ($vcstatus.IsConnected -eq "True") { $vCStatus = (Disconnect-VIServer -Server $vCenterServer -Confirm:$false) }
