@@ -189,7 +189,7 @@ Function NVMeSettings ($CurrentServer) {
     } # Close check for "1" or "2" for adapter type   
        
     # If the Claim rule has not been set, it will set the claim rule
-    if (-not($esxcli.storage.core.claimrule.list.Invoke() | Where-Object Rule -EQ 102)) {
+    if (-not($esxcli.storage.core.claimrule.list.Invoke() | Where-Object Rule -EQ $Claimrule.rule)) {
         Write-Output "Adding Claim Rule $ServerName"
         $esxcli.storage.core.claimrule.add.Invoke($ClaimRule) | Out-Null
         $esxcli.storage.core.claimrule.load.invoke() | Out-Null
