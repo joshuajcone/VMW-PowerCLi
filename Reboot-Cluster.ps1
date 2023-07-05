@@ -6,7 +6,7 @@ Param(
 )
 
 # Connect to vCenter
-(Connect-VIServer -Server $vCenterServer -Credential $Credentials)
+$vCStatus = (Connect-VIServer -Server $vCenterServer -Credential $Credentials)
 
 # Get Server Objects from the cluster
 $ESXiServers = @(get-cluster $ClusterName | get-vmhost)
@@ -130,13 +130,18 @@ foreach ($ESXiServer in $ESXiServers) {
 }
 
 # Report the total script time
+$ScriptHours = $ScriptTimer.Elapsed.Hours
 $ScriptMinutes = $ScriptTimer.Elapsed.Minutes
 $ScriptSeconds = $ScriptTimer.Elapsed.Seconds
-Write-Output "The script is complete. Total time was $ScriptMinutes minutes and $ScriptSeconds seconds"
-
+if ($ScriptHours -gt 0) {
+    Write-Output "The script is complete. Total time was $ScriptHours hours $ScriptMinutes minutes and $ScriptSeconds seconds"
+}
+else {
+    Write-Output "The script is complete. Total time was $ScriptMinutes minutes and $ScriptSeconds seconds" 
+}
 # Confirm all stopwatches are stopped
 if ($RebootTimer.IsRunning -eq "True") { $RebootTimer.Stop() }
 if ($ScriptTimer.IsRunning -eq "True") { $ScriptTimer.Stop() }
 
 # Close vCenter connection
-Disconnect-VIServer -Server $vCenterServer -Confirm:$false | Out-Null
+if ($vcstatus.IsConnected -eq "True") { $vCStatus = (Disconnect-VIServer -Server $vCenterServer -Confirm:$false) }
