@@ -27,16 +27,16 @@ function RebootESXiServer ($CurrentServer) {
     $ServerState = (get-vmhost $ServerName).ConnectionState
 
     # If the server was not in MM, then it sets the host for MM
-    if ($ServerState -ne “Maintenance”) {
-        Write-Output “$ServerName is entering Maintenance Mode”
+    if ($ServerState -ne "Maintenance") {
+        Write-Output "$ServerName is entering Maintenance Mode"
         Set-VMhost $CurrentServer -State maintenance -Evacuate | Out-Null
         
         # Get the Server State again to check for a server that did not enter MM
         $ServerState = (get-vmhost $ServerName).ConnectionState
 
         # If server did not enter maintenance mode the script will exit
-        if ($ServerState -ne “Maintenance”) {
-            Write-Output “Server did not enter maintanenace mode. Cancelling remaining servers”
+        if ($ServerState -ne "Maintenance") {
+            Write-Output "Server did not enter maintanenace mode. Cancelling remaining servers"
         
             # Stop the Stopwatch
             if ($ScriptTimer.IsRunning -eq "True") { $ScriptTimer.Stop() }
@@ -47,18 +47,18 @@ function RebootESXiServer ($CurrentServer) {
         } # Close check that exits out of the script if server does not enter Maintenance Mode
 
         # Write Ouput the host is in MM
-        Write-Output “$ServerName is in Maintenance Mode”
+        Write-Output "$ServerName is in Maintenance Mode"
     } # Close set Maintenance Mode
     
     # If the server was already in MM, then report, and continue to reboot
-    elseif ($ServerState -eq “Maintenance”) {
+    elseif ($ServerState -eq "Maintenance") {
         
         # Write Output if the host was already in MM before being set
-        Write-Output “$ServerName is already in Maintenance Mode”
+        Write-Output "$ServerName is already in Maintenance Mode"
     } # Close catch if server was already in MM.
 
     # Reboot server
-    Write-Output “$ServerName is Rebooting”
+    Write-Output "$ServerName is Rebooting"
     Restart-VMHost $CurrentServer -Confirm:$false | Out-Null
 
     # Start the Timer
