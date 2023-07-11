@@ -43,21 +43,21 @@ function RebootESXiServer ($CurrentServer) {
     $ServerName = $CurrentServer.Name
     
     # Write Output of Host being rebooted
-    Write-Output “## Rebooting $ServerName ##”
+    Write-Output "## Rebooting $ServerName ##"
     
     # Get the server state
     $ServerState = (get-vmhost $ServerName).ConnectionState
     
     # If the server was not in MM, then it sets the host for MM
-    if ($ServerState -ne “Maintenance”) {
-        Write-Output “$ServerName is entering Maintenance Mode”
+    if ($ServerState -ne "Maintenance") {
+        Write-Output "$ServerName is entering Maintenance Mode"
         Set-VMhost $CurrentServer -State maintenance -Evacuate | Out-Null
             
         # Get the Server State again to check for a server that did not enter MM
         $ServerState = (get-vmhost $ServerName).ConnectionState
     
         # If server did not enter maintenance mode the script will exit
-        if ($ServerState -ne “Maintenance”) {
+        if ($ServerState -ne "Maintenance") {
             Write-Output “Server did not enter maintanenace mode. Cancelling remaining servers”
             
             # Stop the Stopwatch
@@ -69,18 +69,18 @@ function RebootESXiServer ($CurrentServer) {
         } # Close check that exits out of the script if server does not enter Maintenance Mode
     
         # Write Ouput the host is in MM
-        Write-Output “$ServerName is in Maintenance Mode”
+        Write-Output "$ServerName is in Maintenance Mode"
     } # Close set Maintenance Mode
         
     # If the server was already in MM, then report, and continue to reboot
-    elseif ($ServerState -eq “Maintenance”) {
+    elseif ($ServerState -eq "Maintenance") {
             
         # Write Output if the host was already in MM before being set
-        Write-Output “$ServerName is already in Maintenance Mode”
+        Write-Output "$ServerName is already in Maintenance Mode"
     } # Close catch if server was already in MM.
     
     # Reboot server
-    Write-Output “$ServerName is Rebooting”
+    Write-Output "$ServerName is Rebooting"
     Restart-VMHost $CurrentServer -Confirm:$false | Out-Null
     
     # Start the Timer
@@ -94,7 +94,7 @@ function RebootESXiServer ($CurrentServer) {
     
     # A timeout was added here in case the server reboots without reporting "Not Responding status", behavior introduced in 7.0u3h
     until (($ServerState -eq "NotResponding") -or ($RebootTimer.Elapsed -ge $timeout)) 
-    Write-Output “$ServerName is Down”
+    Write-Output "$ServerName is Down"
         
     # Check every minute for server to be back from reboot and in maintenance mode
     do {
@@ -260,9 +260,15 @@ $RolledOutPut = $WWPNReport + $NVMeReport | ForEach-Object -Parallel {
 $RolledOutPut | Export-Csv -Path $ReportPath\$ReportName.csv -UseCulture
 
 # Report the total script time
+$ScriptHours = $ScriptTimer.Elapsed.Hours
 $ScriptMinutes = $ScriptTimer.Elapsed.Minutes
 $ScriptSeconds = $ScriptTimer.Elapsed.Seconds
-Write-Output "The script is complete. Total time was $ScriptMinutes minutes and $ScriptSeconds seconds"
+if ($ScriptHours -gt 0) {
+    Write-Output "The script is complete. Total time was $ScriptHours hours $ScriptMinutes minutes and $ScriptSeconds seconds"
+}
+else {
+    Write-Output "The script is complete. Total time was $ScriptMinutes minutes and $ScriptSeconds seconds" 
+}
 
 # Confirm all stopwatches are stopped
 if ($RebootTimer.IsRunning -eq "True") { $RebootTimer.Stop() }
