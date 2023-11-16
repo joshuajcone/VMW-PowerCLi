@@ -114,7 +114,7 @@ function PatchESXiServer ($CurrentServer) {
 
         # Write the status of the job
         $jobStatus = $Status.Message
-        Write-Output "$jobStatus on $hostname"
+        Write-Output "## $jobStatus on $hostname ##"
 
         # Remove the PSDrive
         Remove-PSDrive -Name VIB
@@ -122,7 +122,7 @@ function PatchESXiServer ($CurrentServer) {
         if (($Status).RebootRequired -inotmatch "false") {
 
             # Reboot Host
-            Write-Output "$ServerName is Rebooting"
+            Write-Output "## $ServerName is Rebooting ##"
             Restart-VMHost $CurrentServer -Confirm:$false | Out-Null
 
             # Start the Timer
@@ -136,13 +136,13 @@ function PatchESXiServer ($CurrentServer) {
 
             # A timeout was added here in case the server reboots without reporting "Not Responding status", behavior introduced in 7.0u3h
             until (($ServerState -eq "NotResponding") -or ($RebootTimer.Elapsed -ge $timeout)) 
-            Write-Output â€œ$ServerName is Downâ€
+            Write-Output ## $ServerName is Down ##
     
             # Check every minute for server to be back from reboot and in maintenance mode
             do {
                 Start-Sleep 60
                 $ServerState = (get-vmhost $ServerName).ConnectionState
-                Write-Output "$ServerName is Waiting for Reboot"
+                Write-Output "## $ServerName is Waiting for Reboot ##"
             } # Close waiting for server to reboot
 
             # Wait for server to come back in Maintenance Mode, or passes $2ndtimeout
@@ -156,7 +156,7 @@ function PatchESXiServer ($CurrentServer) {
                 if ($ScriptTimer.IsRunning -eq "True") { $ScriptTimer.Stop() }
 
                 # Inform user which server did not come back online after a reboot
-                Write-Output "$ServerName did not complete reboot"
+                Write-Output "## $ServerName did not complete reboot ##"
 
                 # Prepare for exit by disconnecting vCenter
                 Disconnect-VIServer -Server $vCenterServer -Confirm:$false | Out-Null
@@ -171,7 +171,7 @@ function PatchESXiServer ($CurrentServer) {
                 # Report the total server reboot time.
                 $Minutes = $RebootTimer.Elapsed.Minutes
                 $Seconds = $RebootTimer.Elapsed.Seconds
-                Write-Output "$ServerName is back up. Took $Minutes minutes and $Seconds seconds"
+                Write-Output "## $ServerName is back up. Took $Minutes minutes and $Seconds seconds ##"
         
                 # Stop the Stopwatch
                 if ($RebootTimer.IsRunning -eq "True") { $RebootTimer.Stop() }
@@ -184,7 +184,7 @@ function PatchESXiServer ($CurrentServer) {
         }
       
         # Exit maintenance mode
-        Write-Output "Exiting Maintenance mode"
+        Write-Output "## Exiting Maintenance mode ##"
         Set-VMhost $CurrentServer -State Connected | Out-Null
         do {
             Start-Sleep 10
@@ -194,7 +194,7 @@ function PatchESXiServer ($CurrentServer) {
         Write-Output "## Patch Complete ##"
     } # Close check for $VIB version
     elseif ($vibVersion -eq $targetVersion) {
-        Write-Output "$vibName on host $hostname is already set"
+        Write-Output "## $vibName on host $hostname is already set ##"
     } # Close Elseif
 
 } # Close Patch Function
@@ -209,10 +209,10 @@ $ScriptHours = $ScriptTimer.Elapsed.Hours
 $ScriptMinutes = $ScriptTimer.Elapsed.Minutes
 $ScriptSeconds = $ScriptTimer.Elapsed.Seconds
 if ($ScriptHours -gt 0) {
-    Write-Output "The script is complete. Total time was $ScriptHours hours $ScriptMinutes minutes and $ScriptSeconds seconds"
+    Write-Output "## The script is complete. Total time was $ScriptHours hours $ScriptMinutes minutes and $ScriptSeconds seconds ##"
 }
 else {
-    Write-Output "The script is complete. Total time was $ScriptMinutes minutes and $ScriptSeconds seconds" 
+    Write-Output "## The script is complete. Total time was $ScriptMinutes minutes and $ScriptSeconds seconds ##" 
 }
 # Confirm all stopwatches are stopped
 if ($RebootTimer.IsRunning -eq "True") { $RebootTimer.Stop() }
