@@ -2,7 +2,7 @@
 # This script changes the default "root" iDrac user password, and adds a second user, user ID and password defined in the spreadsheet
 # Reverse DNS must work for the iDrac Name
 # The script only looks at IP's set in the spreadsheet.
-Requires Powershell 7+
+# Requires Powershell 7+
 
 # Make sure the excel module is installed
 $excelModule = "ImportExcel"
