@@ -25,8 +25,25 @@ $ClaimRule = @{
     model        = 'Pure*'
 }
 
+
+    # Try to Connect to vCenter
+    try {
+        $vCstatus = Connect-VIServer -Server $vCenterServer -Credential $Credentials -ErrorAction SilentlyContinue -ErrorVariable RespErr
+    } # Close Try to connect to vCenter
+    
+    # If unable to connect, it ignores invalid certificates for the current session
+    catch {
+        Set-PowerCLIConfiguration -InvalidCertificateAction Ignore -Scope Session -Confirm:$false
+    } # Close Catch for connecting to vCenter - Ignores Invalid certs for the current sessions
+    
+    # Tries to connect again after certificates were ignored
+    finally {
+        if (($vCstatus.IsConnected) -ne $true) {
+            $vCstatus = Connect-VIServer -Server $vCenterServer -Credential $Credentials -ErrorAction SilentlyContinue -ErrorVariable RespErr
+        } # If statement to stop the "Finally" from connecting to vCenter again if it already connected
+    } # Performs a "Finally" action, and attemmpts to connect to vCenter again
+
 # Connect to vCenter
-$vCStatus = (Connect-VIServer -Server $vCenterServer -Credential $Credentials)
 
 # Get Server Objects from the cluster
 $ESXiServers = @(get-cluster $ClusterName | get-vmhost)
@@ -202,29 +219,41 @@ function FCDataCollect ($CurrentServer) {
     $ServerName = $CurrentServer.Name
 
     # Get the Server Settings
-    $HBAs = Get-VMHostHBA -Type FibreChannel -VMHost $CurrentServer
-
+    $HBAs = Get-VMHostHBA -Type FibreChannel -VMHost $ServerName
     # Loop to get WWPN information for each server
     foreach ($HBA in $HBAs) {
-        [Ordered]@{
-            VMHost = $ServerName
-            Device = Get-VMHostHBA -Type FibreChannel -VMHost $ServerName -Device $HBA.Device | Select-Object Device
-            WWPN   = Get-VMHostHBA -Type FibreChannel -VMHost $ServerName -Device $HBA.Device | Select-Object @{N = "WWPN"; E = { "{0:X}" -f $_.PortWorldWideName } }
+
+        # Get the WWPN
+        $WWPN = $HBA | Select-Object @{N = "WWPN"; E = { "{0:X}" -f $_.PortWorldWideName } }
+        $WWPN = $WWPN.WWPN
+
+        # Add ":" after every 2nd character, but not after the last character.
+        $WWPN = "$WWPN" -replace '(.{2})(?!$)', '$1:'
+
+        # Fill the table with data
+        [pscustomobject]@{
+            'VMHost' = $ServerName
+            'Device' = $hba.Device
+            'WWPN'   = $WWPN
+            'HostNQN' = ""
         } # Close Hash Table
     } # Close loop for HBA export
 } # Close the FCDataCollect Function
 
 function NVMeDataCollect ($CurrentServer) {
 
+    # Sets an easy to use Servername object
     $ServerName = $CurrentServer.Name
 
     # Get the Server Settings
     $NvmeData = Get-EsxCli -VMHost $ServerName -V2
 
     # Get Information for the Report
-    [Ordered]@{
+    [pscustomobject]@{
         'VMHost'  = $ServerName
         'HostNQN' = $NvmeData.nvme.info.get.invoke().HostNQN
+        'WWPN' = ""
+        'Device' = ""
     } # Close the Hash Table
 } # Close the NVMeDataCollect Function
 
@@ -244,17 +273,13 @@ $WWPNReport = foreach ($ESXiServer in $ESXiServers) {
 } # Close the secondary loop
 
 # Rollup the data for export
-$Export = @()
-$RolledOutPut = $WWPNReport + $NVMeReport | ForEach-Object -Parallel {
-    $Rollup = $using:Export
-    $Rollup += [PSCustomObject]@{
-        Name = $_.VMHost
-        NQN  = $_.HostNQN
-        HBA  = $_.Device
-        WWPN = $_.WWPN
-    }
-    return $Rollup
-} # Close the data rollup
+$RolledOutPut = $NVMeReport + $WWPNReport
+# Close the data rollup
+
+# Test the output path
+if (-not( Test-Path $ReportPath)) {
+    New-Item -ItemType Directory -Path $ReportPath
+}
 
 # Export the report
 $RolledOutPut | Export-Csv -Path $ReportPath\$ReportName.csv -UseCulture
@@ -276,3 +301,6 @@ if ($ScriptTimer.IsRunning -eq "True") { $ScriptTimer.Stop() }
 
 # Close vCenter connection
 if ($vcstatus.IsConnected -eq "True") { $vCStatus = (Disconnect-VIServer -Server $vCenterServer -Confirm:$false) }
+
+# Wait for user to view the output
+Pause
